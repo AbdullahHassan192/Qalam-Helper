@@ -84,11 +84,6 @@ const ResultsModule = {
                     }
                 }
             });
-            
-            console.log(`🔍 Course ${courseId}: Found ${foundCourseLinks.length} course section links, hasLab: ${hasLabCategories}`);
-            if (foundCourseLinks.length > 0) {
-                console.log(`   Course sections:`, foundCourseLinks);
-            }
 
             const parentRows = doc.querySelectorAll('.table-parent-row');
 
@@ -116,7 +111,7 @@ const ResultsModule = {
 
                 const studentPercentage = QalamHelper.parseNumber(cells[1].textContent);
 
-                // Still check category name to determine if it's a lab category (for accumulation)
+                // Still check category name to determine if it's a lab category
                 const isLab = categoryName.toLowerCase().includes('lab');
 
                 if (weight > 0) {
@@ -196,22 +191,14 @@ const ResultsModule = {
                 
                 lectureWeight = (lectureCreditHours / creditHours) * 100;
                 labWeight = (labCreditHours / creditHours) * 100;
-                
-                console.log(`Course ${courseId}: ${creditHours} credits detected → Lecture: ${lectureWeight.toFixed(2)}%, Lab: ${labWeight.toFixed(2)}%`);
             } else if (hasLabCategories) {
                 // Fallback if credit hours not found - use standard 2+1 (66.67/33.33)
                 lectureWeight = 66.67;
                 labWeight = 33.33;
-                console.log(`Course ${courseId}: Credit hours not found, using default 2+1 split (66.67% / 33.33%)`);
             } else {
                 // Pure lecture course
                 lectureWeight = 100;
                 labWeight = 0;
-                console.log(`Course ${courseId}: Pure lecture course (100%)`);
-            }
-
-            if (hasLabCategories && (lectureMaxMarks === 0 || labMaxMarks === 0)) {
-                console.warn('Only got one tab! Lecture or Lab data is missing.');
             }
 
             const studentAggregate = (lectureObtainedMarks * lectureWeight / 100) + (labObtainedMarks * labWeight / 100);

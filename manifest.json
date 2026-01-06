@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Qalam Helper",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Enhances NUST's Qalam with better attendance tracking and performance comparisons with class average, saving hours of calculation",
   "author": "Abdullah",
   "icons": {

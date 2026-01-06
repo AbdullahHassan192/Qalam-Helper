@@ -2,7 +2,7 @@
 
 const GradebookModule = {
     detectCourseStructure() {
-        // Check tab dropdown for Lab/Lecture sections (more reliable than checking tabs)
+        // Check tab dropdown for Lab/Lecture sections 
         const tabDropdownItems = document.querySelectorAll('.uk-tab-responsive .uk-dropdown a');
         let hasLab = false;
         let hasLecture = false;
@@ -33,9 +33,6 @@ const GradebookModule = {
             if (urlMatch && ResultsModule && ResultsModule.creditHoursCache) {
                 const courseId = urlMatch[1];
                 creditHours = ResultsModule.creditHoursCache[courseId];
-                if (creditHours) {
-                    console.log(`Retrieved credit hours from cache for course ${courseId}: ${creditHours} credits`);
-                }
             }
         }
         
@@ -46,13 +43,10 @@ const GradebookModule = {
             const lectureCreditHours = creditHours - 1;
             lectureWeight = (lectureCreditHours / creditHours) * 100;
             labWeight = (1 / creditHours) * 100;
-            
-            console.log(`Gradebook: ${creditHours} credits detected → Lecture: ${lectureWeight.toFixed(2)}%, Lab: ${labWeight.toFixed(2)}%`);
         } else if (hasLab && hasLecture) {
             // Fallback to standard 2+1 split
             lectureWeight = 66.67;
             labWeight = 33.33;
-            console.log(`Gradebook: Credit hours not found, using default 2+1 split`);
         } else {
             // Pure lecture
             lectureWeight = 100;

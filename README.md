@@ -9,8 +9,14 @@ A simple Chrome extension that saves you hours of manual calculations on Qalam b
 
 ## Installation
 
-### Method 1: Chrome Web Store (Coming Soon)
-The extension is currently under review. You can install it manually in the meantime.
+### Method 1: Chrome Web Store (Recommended)
+
+Install directly from the Chrome Web Store: [Qalam Helper](https://chromewebstore.google.com/detail/qalam-helper/mhcphpancpjccfbpedemhjmilechbfhi)
+
+1. Click the link above
+2. Click "Add to Chrome"
+3. Confirm by clicking "Add extension"
+4. Visit [qalam.nust.edu.pk](https://qalam.nust.edu.pk) to see it in action!
 
 ### Method 2: Manual Installation (Unpacked)
 

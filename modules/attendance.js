@@ -122,7 +122,6 @@ const AttendanceModule = {
     injectDashboardAttendance() {
         // Find all course cards on dashboard
         const courseCards = document.querySelectorAll('.card');
-        console.log('AttendanceModule: Found', courseCards.length, 'cards');
         
         courseCards.forEach(card => {
             if (card.querySelector('.qh-attendance-widget')) return;
@@ -141,18 +140,15 @@ const AttendanceModule = {
             });
 
             if (!attendanceDiv) {
-                console.log('AttendanceModule: No attendance div found in card');
                 return;
             }
 
             const span = attendanceDiv.querySelector('span');
             if (!span) {
-                console.log('AttendanceModule: No span found in attendance div');
                 return;
             }
 
             const attendancePercent = QalamHelper.parseNumber(span.textContent);
-            console.log('AttendanceModule: Found attendance:', attendancePercent + '%');
             
             // We need to fetch the actual total classes to calculate remaining absences
             // For now, estimate based on typical semester (48 classes for 2+1, 32 for 2+0)
@@ -249,18 +245,13 @@ const AttendanceModule = {
             cardContent.appendChild(widget);
             processed++;
         });
-        
-        if (processed > 0) {
-            console.log(`AttendanceModule: Successfully processed ${processed} course cards`);
-        }
     },
 
     init() {
         const page = QalamHelper.detectPage();
-        console.log('AttendanceModule: Page detected as', page);
+
         
         if (page === 'attendance-detail') {
-            console.log('AttendanceModule: On attendance detail page, waiting to inject summary...');
             setTimeout(() => {
                 const data = this.extractAttendanceData();
                 if (data) {
@@ -270,8 +261,6 @@ const AttendanceModule = {
         }
 
         if (page === 'attendance-overview') {
-            console.log('AttendanceModule: On attendance overview, setting up continuous monitoring...');
-            
             // Continuously check and re-inject every 500ms
             setInterval(() => {
                 // First remove any orphaned widgets
@@ -305,11 +294,7 @@ const AttendanceModule = {
         }
 
         if (page === 'dashboard') {
-            console.log('AttendanceModule: On dashboard, waiting to inject widgets...');
-            setTimeout(() => {
-                this.injectDashboardAttendance();
-                console.log('AttendanceModule: Dashboard widgets injected');
-            }, 1500);
+            setTimeout(() => this.injectDashboardAttendance(), 1500);
         }
     }
 };
