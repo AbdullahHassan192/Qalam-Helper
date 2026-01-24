@@ -447,7 +447,7 @@ const GradebookModule = {
     init() {
         if (QalamHelper.detectPage() !== 'gradebook') return;
         
-        setTimeout(() => {
+        const startAnalysis = () => {
             const courseStructure = this.detectCourseStructure();
             const categories = this.extractAllCategoryData();
             const totals = this.calculateTotals(categories, courseStructure);
@@ -462,16 +462,20 @@ const GradebookModule = {
             
             const table = document.querySelector('.uk-table.table_tree');
             if (table) {
+                let debounceTimer;
                 const observer = new MutationObserver(() => {
-                    if (!document.querySelector('.qh-totals-summary')) {
-                        this.injectTotalsSummary(categories, totals);
-                    }
-                    
-                    categories.forEach(cat => {
-                        if (cat.row && !cat.row.querySelector('.qh-category-metrics')) {
-                            this.injectCategoryMetrics(cat);
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => {
+                        if (!document.querySelector('.qh-totals-summary')) {
+                            this.injectTotalsSummary(categories, totals);
                         }
-                    });
+                        
+                        categories.forEach(cat => {
+                            if (cat.row && !cat.row.querySelector('.qh-category-metrics')) {
+                                this.injectCategoryMetrics(cat);
+                            }
+                        });
+                    }, 100);
                 });
                 
                 observer.observe(table, {
@@ -511,9 +515,26 @@ const GradebookModule = {
                         });
                         
                         this.injectTotalsSummary(categories, totals);
-                    }, 400);
+                    }, 200);
                 });
             });
-        }, 1500);
+        };
+
+        // Wait for table to load instead of fixed timeout
+        if (document.querySelector('.table-parent-row')) {
+            startAnalysis();
+        } else {
+            const observer = new MutationObserver((mutations, obs) => {
+                if (document.querySelector('.table-parent-row')) {
+                    obs.disconnect();
+                    startAnalysis();
+                }
+            });
+            
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+        }
     }
 };

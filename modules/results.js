@@ -224,36 +224,30 @@ const ResultsModule = {
         
         const courseCards = document.querySelectorAll('.card');
         
-        for (const card of courseCards) {
-            if (card.querySelector('.qh-results-widget')) continue;
+        const promises = Array.from(courseCards).map(async (card) => {
+            if (card.querySelector('.qh-results-widget')) return;
 
             const cardBody = card.querySelector('.card-body');
-            if (!cardBody) continue;
+            if (!cardBody) return;
 
             // Only process cards that have attendance data
             const attendanceDiv = Array.from(cardBody.querySelectorAll('.uk-text-small'))
                 .find(div => div.textContent.includes('Attendance:'));
             
-            if (!attendanceDiv) continue;
+            if (!attendanceDiv) return;
 
             // The card is inside an <a> tag - get the parent link
             const parentLink = card.parentElement;
-            if (!parentLink || !parentLink.href) {
-                continue;
-            }
+            if (!parentLink || !parentLink.href) return;
 
             // Extract course ID from /student/course/info/XXXXX
             const courseIdMatch = parentLink.href.match(/\/course\/info\/(\d+)/);
-            if (!courseIdMatch) {
-                continue;
-            }
+            if (!courseIdMatch) return;
             
             const courseId = courseIdMatch[1];
 
             const data = await this.fetchGradebookData(courseId);
-            if (!data) {
-                continue;
-            }
+            if (!data) return;
 
             const { studentAggregate, classAggregate } = data;
             
@@ -281,7 +275,9 @@ const ResultsModule = {
 
             cardBody.appendChild(widget);
 
-        }
+        });
+
+        await Promise.all(promises);
     },
 
     async injectResultsSummary() {
@@ -302,20 +298,14 @@ const ResultsModule = {
             });
         }, 200);
 
-        for (const card of courseCards) {
-            if (card.querySelector('.qh-results-summary')) {
-                continue;
-            }
+        const promises = Array.from(courseCards).map(async (card) => {
+            if (card.querySelector('.qh-results-summary')) return;
 
             const link = card.querySelector('a[href*="/student/course/gradebook/"]');
-            if (!link) {
-                continue;
-            }
+            if (!link) return;
 
             const courseIdMatch = link.href.match(/\/gradebook\/(\d+)/);
-            if (!courseIdMatch) {
-                continue;
-            }
+            if (!courseIdMatch) return;
 
             const courseId = courseIdMatch[1];
 
@@ -323,9 +313,7 @@ const ResultsModule = {
             const courseNameText = courseName ? courseName.textContent.trim() : 'Unknown';
 
             const data = await this.fetchGradebookData(courseId);
-            if (!data) {
-                continue;
-            }
+            if (!data) return;
 
             const { studentAggregate, classAggregate } = data;
             const delta = classAggregate ? studentAggregate - classAggregate : 0;
@@ -333,9 +321,7 @@ const ResultsModule = {
             const deltaSymbol = delta >= 0 ? '+' : '';
 
             const contentDiv = card.querySelector('div[style*="padding:2%"]');
-            if (!contentDiv) {
-                continue;
-            }
+            if (!contentDiv) return;
 
             // Function to force height override - be aggressive about it
             const forceHeightOverride = () => {
@@ -346,8 +332,8 @@ const ResultsModule = {
             // Apply immediately
             forceHeightOverride();
             
-            // Keep re-applying every 100ms to fight Qalam's script
-            setInterval(forceHeightOverride, 100);
+            // Removed per-card interval to reduce CPU usage. 
+            // The global interval at the start of this function handles maintenance.
             
             card.classList.add('qh-results-card');
 
@@ -377,7 +363,9 @@ const ResultsModule = {
             `;
 
             contentDiv.appendChild(summaryDiv);
-        }
+        });
+
+        await Promise.all(promises);
     },
 
     init() {

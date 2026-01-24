@@ -10,6 +10,12 @@
     "128": "icons/icon128.png"
   },
   "permissions": [],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "qalam-helper@abdullah.extension",
+      "strict_min_version": "121.0"
+    }
+  },
   "content_scripts": [
     {
       "matches": ["https://qalam.nust.edu.pk/*"],

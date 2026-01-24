@@ -119,11 +119,41 @@ const AttendanceModule = {
         tabs.parentNode.insertBefore(summaryDiv, tabs);
     },
 
-    injectDashboardAttendance() {
+    async fetchAttendanceDetails(courseId) {
+        try {
+            const response = await fetch(`https://qalam.nust.edu.pk/student/course/attendance/${courseId}`);
+            const html = await response.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            
+            let totalClasses = 0;
+            let attendedClasses = 0;
+            
+            const summaryItems = doc.querySelectorAll('.md-card-list li');
+            summaryItems.forEach(item => {
+                const text = item.textContent;
+                if (text.includes('Number of classes Conducted')) {
+                    const span = item.querySelector('span');
+                    if (span) totalClasses = QalamHelper.parseNumber(span.textContent);
+                }
+                if (text.includes('Number of classes Attended')) {
+                    const span = item.querySelector('span');
+                    if (span) attendedClasses = QalamHelper.parseNumber(span.textContent);
+                }
+            });
+            
+            return { totalClasses, attendedClasses };
+        } catch (e) {
+            console.error('Failed to fetch attendance:', e);
+            return null;
+        }
+    },
+
+    async injectDashboardAttendance() {
         // Find all course cards on dashboard
         const courseCards = document.querySelectorAll('.card');
         
-        courseCards.forEach(card => {
+        const promises = Array.from(courseCards).map(async (card) => {
             if (card.querySelector('.qh-attendance-widget')) return;
 
             const cardBody = card.querySelector('.card-body');
@@ -142,21 +172,36 @@ const AttendanceModule = {
             if (!attendanceDiv) {
                 return;
             }
+            const parentLink = card.parentElement;
+            if (!parentLink || !parentLink.href) return;
 
             const span = attendanceDiv.querySelector('span');
             if (!span) {
                 return;
             }
-
-            const attendancePercent = QalamHelper.parseNumber(span.textContent);
+            const courseIdMatch = parentLink.href.match(/\/course\/info\/(\d+)/);
+            if (!courseIdMatch) return;
             
-            // We need to fetch the actual total classes to calculate remaining absences
-            // For now, estimate based on typical semester (48 classes for 2+1, 32 for 2+0)
-            // This will be updated when we have access to the detailed attendance page
-            const estimatedTotal = 48; // Conservative estimate
-            const minRequired = Math.ceil(estimatedTotal * 0.75);
-            const maxAbsences = estimatedTotal - minRequired;
-            const currentAbsences = Math.round((estimatedTotal * (100 - attendancePercent)) / 100);
+            const courseId = courseIdMatch[1];
+
+            // Parse credit hours for projection
+            let creditHours = 3;
+            const creditMatch = cardBody.textContent.match(/Credits?\s*:\s*([\d.]+)/i);
+            if (creditMatch) {
+                creditHours = parseFloat(creditMatch[1]);
+            }
+
+            // Fetch exact data
+            const data = await this.fetchAttendanceDetails(courseId);
+            if (!data) return;
+            
+            // Calculate using exact absences + estimated semester length
+            // Use max() to handle cases where actual classes > estimated (e.g. makeup classes)
+            const estimatedSemesterTotal = Math.max(Math.round(creditHours * 16), data.totalClasses);
+            const minRequired = Math.ceil(estimatedSemesterTotal * 0.75);
+            const maxAbsences = estimatedSemesterTotal - minRequired;
+            
+            const currentAbsences = data.totalClasses - data.attendedClasses;
             const remainingAbsences = Math.max(0, maxAbsences - currentAbsences);
             
             const statusColor = remainingAbsences > 2 ? '#10b981' : 
@@ -183,6 +228,8 @@ const AttendanceModule = {
 
             cardBody.appendChild(widget);
         });
+
+        await Promise.all(promises);
     },
 
     injectAttendanceOverview() {
@@ -228,8 +275,14 @@ const AttendanceModule = {
 
             const attendancePercent = QalamHelper.parseNumber(attendanceText.textContent);
             
-            // Estimate total classes (conservative)
-            const estimatedTotal = 48;
+            // Parse credit hours to estimate total classes
+            let creditHours = 3;
+            // Check for "Credit Hours" or "Credits"
+            const creditMatch = card.textContent.match(/(?:Credit Hours?|Credits?)\s*:\s*([\d.]+)/i);
+            if (creditMatch) {
+                creditHours = parseFloat(creditMatch[1]);
+            }
+            const estimatedTotal = Math.round(creditHours * 16);
             const minRequired = Math.ceil(estimatedTotal * 0.75);
             const maxAbsences = estimatedTotal - minRequired;
             const currentAbsences = Math.round((estimatedTotal * (100 - attendancePercent)) / 100);
@@ -261,36 +314,34 @@ const AttendanceModule = {
         }
 
         if (page === 'attendance-overview') {
-            // Continuously check and re-inject every 500ms
-            setInterval(() => {
-                // First remove any orphaned widgets
-                const allWidgets = document.querySelectorAll('.qh-attendance-widget');
-                allWidgets.forEach(widget => {
-                    const parentCard = widget.closest('.md-card');
-                    if (!parentCard) {
-                        widget.remove();
-                    }
-                });
+            // Initial injection
+            this.injectAttendanceOverview();
+
+            // Use MutationObserver instead of polling to reduce CPU usage
+            const observer = new MutationObserver((mutations) => {
+                let shouldUpdate = false;
                 
-                // Then check if any cards need widgets
-                const cards = document.querySelectorAll('.md-card');
-                let needsReinject = false;
-                
-                cards.forEach(card => {
-                    const content = card.querySelector('.md-card-content');
-                    const attendanceText = content?.querySelector('.uk-text-small');
-                    const hasWidget = content?.querySelector('.qh-attendance-widget');
-                    const hasAttendanceData = attendanceText && attendanceText.textContent.includes('Attendance:');
+                for (const mutation of mutations) {
+                    // Ignore mutations caused by our own widget injection
+                    const isOurWidget = Array.from(mutation.addedNodes).some(node => 
+                        node.nodeType === 1 && node.classList.contains('qh-attendance-widget')
+                    );
                     
-                    if (hasAttendanceData && !hasWidget) {
-                        needsReinject = true;
+                    if (!isOurWidget) {
+                        shouldUpdate = true;
+                        break;
                     }
-                });
-                
-                if (needsReinject) {
+                }
+
+                if (shouldUpdate) {
                     this.injectAttendanceOverview();
                 }
-            }, 500);
+            });
+
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
         }
 
         if (page === 'dashboard') {

@@ -38,6 +38,11 @@ Install directly from the Chrome Web Store: [Qalam Helper](https://chromewebstor
    - Click "Load unpacked"
    - Select the extracted folder
 
+4. **Install in Firefox**
+   - Open Firefox and go to `about:debugging#/runtime/this-firefox`
+   - Click "Load Temporary Add-on..."
+   - Select the `manifest.json` file from the extracted folder
+
 ## Privacy
 
 This extension does **not** collect, store, or transmit any of your data. Everything is processed locally in your browser.

@@ -1,12 +1,15 @@
 //Shared helper functions
 
 const QalamHelper = {
+    _numRegex: /[^0-9.-]/g,
+
     /*Parse number from text, handling various formats*/
     parseNumber(text) {
         if (typeof text === 'number') return text;
         if (!text) return 0;
         
-        const cleaned = text.toString().replace(/[^0-9.-]/g, '');
+        const str = typeof text === 'string' ? text : text.toString();
+        const cleaned = str.replace(this._numRegex, '');
         const num = parseFloat(cleaned);
         return isNaN(num) ? 0 : num;
     },
