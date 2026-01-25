@@ -1,9 +1,12 @@
 //AttendanceModule - handles attendance data extraction and display
 
 const AttendanceModule = {
-    extractAttendanceData() {
-        let totalClasses = 0;
+    // Flag to prevent concurrent executions of overview injection
+    isProcessingOverview: false,
+
+    extractAttendanceData(courseId = null) {
         let attendedClasses = 0;
+        let conductedClasses = 0;
 
         // Look for the summary blocks with attendance data
         const summaryItems = document.querySelectorAll('.md-card-list li');
@@ -14,7 +17,7 @@ const AttendanceModule = {
             if (text.includes('Number of classes Conducted')) {
                 const span = item.querySelector('span');
                 if (span) {
-                    totalClasses += QalamHelper.parseNumber(span.textContent);
+                    conductedClasses += QalamHelper.parseNumber(span.textContent);
                 }
             }
             
@@ -26,17 +29,29 @@ const AttendanceModule = {
             }
         });
 
-        const absentClasses = totalClasses - attendedClasses;
-        const attendancePercent = totalClasses > 0 ? (attendedClasses / totalClasses) * 100 : 0;
-        const requiredPercent = 75;
-        const minRequired = Math.ceil(totalClasses * 0.75);
-        const maxAbsences = totalClasses - minRequired;
+        // Get credit hours from cache if courseId provided
+        let creditHours = 3; // Default fallback
+        if (courseId && ResultsModule && ResultsModule.creditHoursCache) {
+            creditHours = ResultsModule.creditHoursCache[courseId] || 3;
+        }
+
+        // Calculate total classes for semester: Credits * 16 weeks
+        const totalClasses = creditHours * 16;
+        const requiredPresent = Math.ceil(totalClasses * 0.75);
+        const maxAbsences = totalClasses - requiredPresent;
+        
+        // Use conducted classes if available (early semester), otherwise use calculated total
+        const effectiveTotalClasses = conductedClasses > 0 ? conductedClasses : totalClasses;
+        const absentClasses = effectiveTotalClasses - attendedClasses;
+        const attendancePercent = effectiveTotalClasses > 0 ? (attendedClasses / effectiveTotalClasses) * 100 : 0;
         const remainingAbsences = maxAbsences - absentClasses;
+        const requiredPercent = 75;
         const status = attendancePercent >= requiredPercent ? 'safe' : 
                       attendancePercent >= 70 ? 'warning' : 'danger';
 
         return {
             totalClasses,
+            conductedClasses,
             attendedClasses,
             absentClasses,
             attendancePercent,
@@ -83,10 +98,10 @@ const AttendanceModule = {
                         Classes Attended
                     </div>
                     <div style="font-size: 36px; font-weight: 700; color: #1e293b; line-height: 1; font-family: ui-monospace, monospace;">
-                        ${data.attendedClasses}/${data.totalClasses}
+                        ${data.attendedClasses}/${data.conductedClasses > 0 ? data.conductedClasses : data.totalClasses}
                     </div>
                     <div style="font-size: 12px; color: #64748b; margin-top: 8px;">
-                        ${data.absentClasses} absences
+                        ${data.absentClasses} absences • ${data.totalClasses} total classes expected
                     </div>
                 </div>
 
@@ -98,7 +113,7 @@ const AttendanceModule = {
                         ${Math.max(0, data.remainingAbsences)}
                     </div>
                     <div style="font-size: 12px; color: #64748b; margin-top: 8px;">
-                        out of ${data.maxAbsences + 1} allowed
+                        out of ${data.maxAbsences} allowed
                     </div>
                 </div>
 
@@ -119,15 +134,99 @@ const AttendanceModule = {
         tabs.parentNode.insertBefore(summaryDiv, tabs);
     },
 
-    injectDashboardAttendance() {
+    async fetchAttendanceData(courseId) {
+        try {
+            const response = await fetch(`https://qalam.nust.edu.pk/student/course/attendance/${courseId}`);
+            const html = await response.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            // Check if course has Lab component
+            const tabs = doc.querySelectorAll('.uk-tab li');
+            let hasLab = false;
+            tabs.forEach(tab => {
+                const text = tab.textContent.trim().toLowerCase();
+                if (text.includes('lab')) {
+                    hasLab = true;
+                }
+            });
+
+            let lectureAttended = 0;
+            let lectureConducted = 0;
+            let labAttended = 0;
+            let labConducted = 0;
+
+            // Get all tab content containers
+            const tabContainers = doc.querySelectorAll('#tabs_anim1 > li');
+            
+            if (tabContainers.length > 1 && hasLab) {
+                // Multiple tabs (Lecture and Lab)
+                tabContainers.forEach((container, index) => {
+                    const isLab = index === 1; // Second tab is Lab
+                    
+                    const summaryItems = container.querySelectorAll('.md-card-list li');
+                    summaryItems.forEach(item => {
+                        const text = item.textContent;
+                        const span = item.querySelector('span');
+                        if (!span) return;
+                        
+                        if (text.includes('Number of classes Conducted')) {
+                            const value = parseInt(span.textContent.trim()) || 0;
+                            if (isLab) {
+                                labConducted = value;
+                            } else {
+                                lectureConducted = value;
+                            }
+                        }
+                        
+                        if (text.includes('Number of classes Attended')) {
+                            const value = parseInt(span.textContent.trim()) || 0;
+                            if (isLab) {
+                                labAttended = value;
+                            } else {
+                                lectureAttended = value;
+                            }
+                        }
+                    });
+                });
+            } else {
+                // Single tab (Lecture only)
+                const summaryItems = doc.querySelectorAll('.md-card-list li');
+                summaryItems.forEach(item => {
+                    const text = item.textContent;
+                    const span = item.querySelector('span');
+                    if (!span) return;
+                    
+                    if (text.includes('Number of classes Conducted')) {
+                        lectureConducted = parseInt(span.textContent.trim()) || 0;
+                    }
+                    
+                    if (text.includes('Number of classes Attended')) {
+                        lectureAttended = parseInt(span.textContent.trim()) || 0;
+                    }
+                });
+            }
+
+            // Return combined totals
+            return {
+                attendedClasses: lectureAttended + labAttended,
+                conductedClasses: lectureConducted + labConducted
+            };
+        } catch (error) {
+            console.error('Failed to fetch attendance data:', error);
+            return null;
+        }
+    },
+
+    async injectDashboardAttendance() {
         // Find all course cards on dashboard
         const courseCards = document.querySelectorAll('.card');
         
-        courseCards.forEach(card => {
-            if (card.querySelector('.qh-attendance-widget')) return;
+        for (const card of courseCards) {
+            if (card.querySelector('.qh-attendance-widget')) continue;
 
             const cardBody = card.querySelector('.card-body');
-            if (!cardBody) return;
+            if (!cardBody) continue;
 
             // Find the .uk-text-small div that contains "Attendance:"
             const textDivs = cardBody.querySelectorAll('.uk-text-small');
@@ -140,23 +239,57 @@ const AttendanceModule = {
             });
 
             if (!attendanceDiv) {
-                return;
+                continue;
             }
 
-            const span = attendanceDiv.querySelector('span');
-            if (!span) {
-                return;
+            // Color the attendance text based on percentage
+            const attendanceSpan = attendanceDiv.querySelector('span');
+            if (attendanceSpan) {
+                const attendancePercent = parseFloat(attendanceSpan.textContent) || 0;
+                let color;
+                if (attendancePercent >= 80) {
+                    color = '#10b981'; // Green
+                } else if (attendancePercent >= 75) {
+                    color = '#f59e0b'; // Yellow/Orange
+                } else {
+                    color = '#ef4444'; // Red
+                }
+                attendanceDiv.style.color = color;
+                attendanceDiv.style.fontWeight = '600';
             }
 
-            const attendancePercent = QalamHelper.parseNumber(span.textContent);
+            // Get course ID from parent link
+            const parentLink = card.parentElement;
+            let courseId = null;
+            if (parentLink && parentLink.href) {
+                const courseIdMatch = parentLink.href.match(/\/course\/info\/(\d+)/);
+                if (courseIdMatch) {
+                    courseId = courseIdMatch[1];
+                }
+            }
             
-            // We need to fetch the actual total classes to calculate remaining absences
-            // For now, estimate based on typical semester (48 classes for 2+1, 32 for 2+0)
-            // This will be updated when we have access to the detailed attendance page
-            const estimatedTotal = 48; // Conservative estimate
-            const minRequired = Math.ceil(estimatedTotal * 0.75);
-            const maxAbsences = estimatedTotal - minRequired;
-            const currentAbsences = Math.round((estimatedTotal * (100 - attendancePercent)) / 100);
+            if (!courseId) {
+                continue;
+            }
+            
+            // Fetch actual attendance data
+            const attendanceData = await this.fetchAttendanceData(courseId);
+            if (!attendanceData) {
+                continue;
+            }
+            
+            // Get credit hours from cache
+            let creditHours = 3; // Default fallback
+            if (ResultsModule && ResultsModule.creditHoursCache) {
+                creditHours = ResultsModule.creditHoursCache[courseId] || 3;
+            }
+            
+            // Calculate using credit hour formula
+            const totalClasses = creditHours * 16;
+            const requiredPresent = Math.ceil(totalClasses * 0.75);
+            const maxAbsences = totalClasses - requiredPresent;
+            const attendedClasses = attendanceData.attendedClasses;
+            const currentAbsences = attendanceData.conductedClasses - attendedClasses;
             const remainingAbsences = Math.max(0, maxAbsences - currentAbsences);
             
             const statusColor = remainingAbsences > 2 ? '#10b981' : 
@@ -173,19 +306,25 @@ const AttendanceModule = {
                         <div style="font-size: 9px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: #64748b; margin-bottom: 2px;">Remaining Absences</div>
                         <div style="font-size: 18px; font-weight: 700; color: ${statusColor}; font-family: ui-monospace, monospace;">${remainingAbsences}</div>
                     </div>
-                    <div style="padding: 4px 12px; background: ${statusBg}; border-radius: 6px;">
-                        <span style="font-size: 10px; font-weight: 600; color: ${statusColor};">
-                            ${remainingAbsences > 2 ? '✓ Safe' : remainingAbsences > 0 ? '⚠ Low' : '⚠ None'}
-                        </span>
+                    <div style="text-align: right; flex: 1;">
+                        <div style="font-size: 9px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: #64748b; margin-bottom: 2px;">Attended</div>
+                        <div style="font-size: 14px; font-weight: 700; color: #1e293b; font-family: ui-monospace, monospace;">${attendedClasses}/${attendanceData.conductedClasses}</div>
                     </div>
                 </div>
             `;
 
             cardBody.appendChild(widget);
-        });
+        }
     },
 
-    injectAttendanceOverview() {
+    async injectAttendanceOverview() {
+        // Prevent concurrent executions
+        if (this.isProcessingOverview) {
+            return;
+        }
+        
+        this.isProcessingOverview = true;
+        
         // Find and remove any orphaned widgets
         const allWidgets = document.querySelectorAll('.qh-attendance-widget');
         allWidgets.forEach(widget => {
@@ -200,39 +339,52 @@ const AttendanceModule = {
         const courseCards = document.querySelectorAll('.md-card');
         
         let processed = 0;
-        courseCards.forEach(card => {
+        for (const card of courseCards) {
             // Skip if already has widget
             const cardContent = card.querySelector('.md-card-content');
             if (cardContent && cardContent.querySelector('.qh-attendance-widget')) {
-                return;
+                continue;
             }
 
             if (!cardContent) {
-                return;
+                continue;
             }
 
             // Must have a link to attendance detail page (to confirm it's a course card)
             const attendanceLink = card.querySelector('a[href*="/student/course/attendance/"]');
             if (!attendanceLink) {
-                return;
+                continue;
             }
 
-            // Get course name for debugging
-            const courseName = card.querySelector('.md-list-heading');
-            const courseNameText = courseName ? courseName.textContent.trim() : 'Unknown';
-
-            const attendanceText = cardContent.querySelector('.uk-text-small');
-            if (!attendanceText || !attendanceText.textContent.includes('Attendance:')) {
-                return;
+            // Get course ID from attendance link
+            let courseId = null;
+            const courseIdMatch = attendanceLink.href.match(/\/attendance\/(\d+)/);
+            if (courseIdMatch) {
+                courseId = courseIdMatch[1];
             }
-
-            const attendancePercent = QalamHelper.parseNumber(attendanceText.textContent);
             
-            // Estimate total classes (conservative)
-            const estimatedTotal = 48;
-            const minRequired = Math.ceil(estimatedTotal * 0.75);
-            const maxAbsences = estimatedTotal - minRequired;
-            const currentAbsences = Math.round((estimatedTotal * (100 - attendancePercent)) / 100);
+            if (!courseId) {
+                continue;
+            }
+            
+            // Fetch actual attendance data
+            const attendanceData = await this.fetchAttendanceData(courseId);
+            if (!attendanceData) {
+                continue;
+            }
+            
+            // Get credit hours from cache
+            let creditHours = 3; // Default fallback
+            if (ResultsModule && ResultsModule.creditHoursCache) {
+                creditHours = ResultsModule.creditHoursCache[courseId] || 3;
+            }
+            
+            // Calculate using credit hour formula
+            const totalClasses = creditHours * 16;
+            const requiredPresent = Math.ceil(totalClasses * 0.75);
+            const maxAbsences = totalClasses - requiredPresent;
+            const attendedClasses = attendanceData.attendedClasses;
+            const currentAbsences = attendanceData.conductedClasses - attendedClasses;
             const remainingAbsences = Math.max(0, maxAbsences - currentAbsences);
             
             const statusColor = remainingAbsences > 2 ? '#10b981' : 
@@ -244,7 +396,10 @@ const AttendanceModule = {
 
             cardContent.appendChild(widget);
             processed++;
-        });
+        }
+        
+        // Release the lock
+        this.isProcessingOverview = false;
     },
 
     init() {
@@ -253,7 +408,14 @@ const AttendanceModule = {
         
         if (page === 'attendance-detail') {
             setTimeout(() => {
-                const data = this.extractAttendanceData();
+                // Extract courseId from URL
+                let courseId = null;
+                const urlMatch = window.location.href.match(/\/attendance\/(\d+)/);
+                if (urlMatch) {
+                    courseId = urlMatch[1];
+                }
+                
+                const data = this.extractAttendanceData(courseId);
                 if (data) {
                     this.injectAttendanceSummary(data);
                 }
@@ -294,7 +456,7 @@ const AttendanceModule = {
         }
 
         if (page === 'dashboard') {
-            setTimeout(() => this.injectDashboardAttendance(), 1500);
+            setTimeout(async () => await this.injectDashboardAttendance(), 1500);
         }
     }
 };
