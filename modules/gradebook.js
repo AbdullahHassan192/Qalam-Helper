@@ -147,44 +147,43 @@ const GradebookModule = {
             
             const badgeMatch = categoryCell.querySelector('.uk-badge');
             const weight = badgeMatch ? QalamHelper.parseNumber(badgeMatch.textContent) : 0;
-
-            const percentageCell = cells[1];
-            const studentPercentage = QalamHelper.parseNumber(percentageCell.textContent);
+            const qalamObtainedPercentage = QalamHelper.parseNumber(cells[1].textContent);
 
             const childRows = this.getChildRows(row);
-            const classAverages = [];
-            const studentPercentages = [];
+            let totalMax = 0;
+            let totalObtained = 0;
+            let totalClassAvg = 0;
+            let hasValidChildData = false;
 
             childRows.forEach(childRow => {
                 const childCells = childRow.querySelectorAll('td');
                 if (childCells.length >= 5) {
-                    const maxMark = QalamHelper.parseNumber(childCells[1].textContent);
-                    const classAvgMarks = QalamHelper.parseNumber(childCells[3].textContent);
-                    const studPercent = QalamHelper.parseNumber(childCells[4].textContent);
-                    
-                    if (maxMark === 0 && classAvgMarks === 0 && studPercent === 0) {
+                    const maxText = childCells[1].textContent.trim();
+                    const obtainedText = childCells[2].textContent.trim();
+                    const classAvgText = childCells[3].textContent.trim();
+
+                    const maxMark = QalamHelper.parseNumber(maxText);
+                    if (maxMark <= 0) {
                         return;
                     }
-                    
-                    if (maxMark > 0 && classAvgMarks >= 0) {
-                        const classAvgPercent = (classAvgMarks / maxMark) * 100;
-                        classAverages.push(classAvgPercent);
+
+                    // Skip rows with no marks values at all (e.g. placeholders / empty rows).
+                    if (obtainedText === '' && classAvgText === '') {
+                        return;
                     }
-                    
-                    if (studPercent > 0) {
-                        studentPercentages.push(studPercent);
-                    }
+
+                    const obtainedMarks = QalamHelper.parseNumber(obtainedText);
+                    const classAvgMarks = QalamHelper.parseNumber(classAvgText);
+
+                    totalMax += maxMark;
+                    totalObtained += obtainedMarks;
+                    totalClassAvg += classAvgMarks;
+                    hasValidChildData = true;
                 }
             });
 
-            const classAvg = classAverages.length > 0 
-                ? classAverages.reduce((a, b) => a + b, 0) / classAverages.length 
-                : 0;
-
-            let finalStudentPercentage = studentPercentage;
-            if (studentPercentage === 0 && studentPercentages.length > 0) {
-                finalStudentPercentage = studentPercentages.reduce((a, b) => a + b, 0) / studentPercentages.length;
-            }
+            const finalStudentPercentage = totalMax > 0 ? (totalObtained / totalMax) * 100 : 0;
+            const classAvg = totalMax > 0 ? (totalClassAvg / totalMax) * 100 : 0;
 
             const delta = classAvg > 0 ? finalStudentPercentage - classAvg : 0;
 
@@ -195,7 +194,8 @@ const GradebookModule = {
                 contribution: (finalStudentPercentage / 100) * weight,
                 classAverage: classAvg,
                 delta: delta,
-                hasData: finalStudentPercentage > 0 || classAvg > 0,
+                hasData: hasValidChildData && totalMax > 0,
+                qalamObtainedPercentage,
                 row: storeRows ? row : null,
                 portionType: portionType
             };
@@ -204,6 +204,50 @@ const GradebookModule = {
         });
 
         return categories;
+    },
+
+    injectObtainedPercentageCorrection(category) {
+        if (!category.row || !category.hasData) return;
+
+        const cells = category.row.querySelectorAll('td');
+        if (cells.length < 2) return;
+
+        const obtainedCell = cells[1];
+        const existingNote = obtainedCell.querySelector('.qh-obtained-correction-note');
+
+        const qalamPct = category.qalamObtainedPercentage;
+        const actualPct = category.studentPercentage;
+
+        if (qalamPct <= 0) {
+            if (existingNote) existingNote.remove();
+            return;
+        }
+
+        // Compare at displayed precision tolerance to avoid noisy tiny decimal differences.
+        const differs = Math.abs(qalamPct - actualPct) > 0.01;
+        if (!differs) {
+            if (existingNote) existingNote.remove();
+            return;
+        }
+
+        const noteText = `(Actual Obtained Percentage is ${QalamHelper.formatPercent(actualPct)}%, Qalam is incorrect)`;
+        const noteClass = actualPct > qalamPct ? 'uk-text-success' : 'uk-text-danger';
+
+        // Important: avoid touching the DOM when nothing changed to prevent mutation-observer loops.
+        if (existingNote) {
+            if (existingNote.textContent !== noteText) {
+                existingNote.textContent = noteText;
+            }
+            existingNote.classList.remove('uk-text-success', 'uk-text-danger');
+            existingNote.classList.add(noteClass);
+            return;
+        }
+
+        const note = QalamHelper.createElement('span', `qh-obtained-correction-note ${noteClass}`);
+        note.style.marginLeft = '6px';
+        note.style.fontSize = '11px';
+        note.textContent = noteText;
+        obtainedCell.appendChild(note);
     },
 
     getChildRows(parentRow) {
@@ -455,6 +499,7 @@ const GradebookModule = {
             categories.forEach(cat => {
                 if (cat.row) {
                     this.injectCategoryMetrics(cat);
+                    this.injectObtainedPercentageCorrection(cat);
                 }
             });
             
@@ -470,6 +515,10 @@ const GradebookModule = {
                     categories.forEach(cat => {
                         if (cat.row && !cat.row.querySelector('.qh-category-metrics')) {
                             this.injectCategoryMetrics(cat);
+                        }
+
+                        if (cat.row) {
+                            this.injectObtainedPercentageCorrection(cat);
                         }
                     });
                 });
@@ -507,6 +556,7 @@ const GradebookModule = {
                             if (cat) {
                                 cat.row = row;
                                 this.injectCategoryMetrics(cat);
+                                this.injectObtainedPercentageCorrection(cat);
                             }
                         });
                         

@@ -109,8 +109,6 @@ const ResultsModule = {
                 }
                 const categoryName = nameCellClone.textContent.trim();
 
-                const studentPercentage = QalamHelper.parseNumber(cells[1].textContent);
-
                 // Still check category name to determine if it's a lab category
                 const isLab = categoryName.toLowerCase().includes('lab');
 
@@ -166,8 +164,6 @@ const ResultsModule = {
                             studentContribution = (categoryStudentMarksSum / categoryMaxMarksSum) * weight;
                             categoryClassAvgContribution = (categoryClassAvgSum / categoryMaxMarksSum) * weight;
                         }
-                    } else if (studentPercentage > 0) {
-                        studentContribution = (studentPercentage / 100) * weight;
                     }
 
                     if (isLab) {
