@@ -22,7 +22,7 @@
 }
 
 /* Hide orphaned attendance widget in the outer md-card-content (the one with tabs) */
-.md-card-content:has(.uk-tab) > .qh-attendance-widget {
+.md-card-content.qh-has-tabs > .qh-attendance-widget {
     display: none !important;
 }
 

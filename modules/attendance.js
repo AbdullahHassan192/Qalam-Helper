@@ -4,6 +4,17 @@ const AttendanceModule = {
     // Flag to prevent concurrent executions of overview injection
     isProcessingOverview: false,
 
+    markTabContainers() {
+        const cardContents = document.querySelectorAll('.md-card-content');
+        cardContents.forEach(content => {
+            if (content.querySelector('.uk-tab')) {
+                content.classList.add('qh-has-tabs');
+            } else {
+                content.classList.remove('qh-has-tabs');
+            }
+        });
+    },
+
     extractAttendanceData(courseId = null) {
         let attendedClasses = 0;
         let conductedClasses = 0;
@@ -324,6 +335,8 @@ const AttendanceModule = {
         }
         
         this.isProcessingOverview = true;
+
+        this.markTabContainers();
         
         // Find and remove any orphaned widgets
         const allWidgets = document.querySelectorAll('.qh-attendance-widget');
@@ -425,6 +438,8 @@ const AttendanceModule = {
         if (page === 'attendance-overview') {
             // Continuously check and re-inject every 500ms
             setInterval(() => {
+                this.markTabContainers();
+
                 // First remove any orphaned widgets
                 const allWidgets = document.querySelectorAll('.qh-attendance-widget');
                 allWidgets.forEach(widget => {
