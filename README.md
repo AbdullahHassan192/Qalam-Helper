@@ -1,6 +1,6 @@
 # Qalam Helper
 
-A simple Chrome extension that saves you hours of manual calculations on Qalam by showing you the remaining number of classes you can skip before getting an XF, and helping you track your performance across all courses by comparing your grades with the class average.
+A browser extension that saves you hours of manual calculations on Qalam by showing you the remaining number of classes you can skip before getting an XF, and helping you track your performance across all courses by comparing your grades with the class average.
 
 ## Features
 
@@ -17,6 +17,13 @@ Install directly from the Chrome Web Store: [Qalam Helper](https://chromewebstor
 2. Click "Add to Chrome"
 3. Confirm by clicking "Add extension"
 4. Visit [qalam.nust.edu.pk](https://qalam.nust.edu.pk) to see it in action!
+
+### Firefox (Temporary Add-on / Developer Mode)
+
+1. Open Firefox and go to `about:debugging#/runtime/this-firefox`
+2. Click **Load Temporary Add-on...**
+3. Select the `manifest.json` file from this project folder
+4. Visit [qalam.nust.edu.pk](https://qalam.nust.edu.pk) to use it in Firefox
 
 ### Method 2: Manual Installation (Unpacked)
 
