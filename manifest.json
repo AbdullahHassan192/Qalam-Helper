@@ -4,6 +4,12 @@
   "version": "1.3.0",
   "description": "Enhances NUST's Qalam with better attendance tracking and performance comparisons with class average, saving hours of calculation",
   "author": "Abdullah",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "qalam-helper@qalam-helper.local",
+      "strict_min_version": "109.0"
+    }
+  },
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
